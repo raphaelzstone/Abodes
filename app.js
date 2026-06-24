@@ -509,18 +509,51 @@ function promptForName() {
   refreshMenu();
 }
 
-function showLeaderboard() {
+function escapeHtml(s) {
+  return String(s).replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c]));
+}
+
+// One leaderboard panel: players ranked by fastest time (lowest seconds first).
+function renderBoardPanel(title, rows, myId) {
+  if (!rows) {
+    return `<div class="board-panel"><h3>${title}</h3><div class="board-empty">—</div></div>`;
+  }
+  if (!rows.length) {
+    return `<div class="board-panel"><h3>${title}</h3><div class="board-empty">No times yet.</div></div>`;
+  }
+  const sorted = [...rows].sort((a, b) => a.seconds - b.seconds);
+  const lis = sorted.map((r, i) => {
+    const me = r.userId === myId ? " me" : "";
+    const name = escapeHtml(r.name || "—");
+    return `<li class="board-row${me}">` +
+           `<span class="board-rank">${i + 1}</span>` +
+           `<span class="board-name">${name}</span>` +
+           `<span class="board-score">${fmtElapsed(r.seconds)}</span>` +
+           `</li>`;
+  }).join("");
+  return `<div class="board-panel"><h3>${title}</h3><ol class="board-list">${lis}</ol></div>`;
+}
+
+async function showLeaderboard() {
   showView("board");
   const root = $("#board-content");
   if (!window.Leaderboard || !window.Leaderboard.configured) {
     root.innerHTML = `
       <div class="board-empty board-empty-big">
-        Leaderboard coming soon.<br>
-        <small>Daily fastest-solve rankings are on the way.</small>
+        Leaderboard not configured.<br>
+        <small>Add your Firebase config in firebase-config.js — see README.</small>
       </div>`;
     return;
   }
   root.innerHTML = `<div class="board-empty board-empty-big">Loading…</div>`;
+  const myId = window.AbodesUser.getOrCreateUser().id;
+  const [today, yest] = await Promise.all([
+    window.Leaderboard.fetchBoard(dateKeyOffset(0)),
+    window.Leaderboard.fetchBoard(dateKeyOffset(1)),
+  ]);
+  root.innerHTML =
+    renderBoardPanel("Today", today, myId) +
+    renderBoardPanel("Yesterday", yest, myId);
 }
 
 // Small illustrative boards in the How-to-play dropdown. Each spec is a grid of
